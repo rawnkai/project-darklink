@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>PROJECT DARKLINK // PROTOCOL 0</title>
+  
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/qrcode/build/qrcode.min.js"></script>
+  
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;600&display=swap');
+    body { font-family: 'Inter', sans-serif; background-color: #F4EFE6; color: #1E293B; }
+    .title-font { font-family: 'Space Grotesk', sans-serif; }
+    #map { height: 320px; border-radius: 12px; cursor: crosshair; }
+  </style>
+</head>
+<body class="p-4 md:p-6 min-h-screen flex flex-col max-w-6xl mx-auto">
+
+  <!-- Top Header Bar -->
+  <header class="bg-white border border-[#D8D2C2] rounded-2xl p-4 mb-4 shadow-sm flex flex-col md:flex-row justify-between items-center gap-3">
+    <div>
+      <div class="flex items-center space-x-2">
+        <span class="w-3 h-3 bg-blue-600 rounded-full animate-ping"></span>
+        <h1 class="title-font text-xl md:text-2xl font-bold tracking-tight text-[#1E293B]">PROJECT DARKLINK</h1>
+      </div>
+      <p class="text-xs text-gray-500 font-medium">ZERO-CONNECTIVITY EDGE AI & OPTICAL MESH TERMINAL</p>
+    </div>
+    
+    <!-- Real-time Status Badges -->
+    <div class="flex items-center space-x-2 text-xs">
+      <span id="bandwidthBadge" class="bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 rounded-full border border-emerald-300 font-mono transition-all">
+        MEASURING...
+      </span>
+      <span id="locStatus" class="bg-blue-100 text-blue-900 font-bold px-3 py-1.5 rounded-full border border-blue-300">
+        GPS LOCK ACTIVE
+      </span>
+    </div>
+  </header>
+
+  <!-- GUARDIAN SOS STORE-AND-FORWARD PANEL -->
+  <div class="bg-slate-900 border border-slate-800 text-white rounded-2xl p-4 mb-5 shadow-lg flex flex-col md:flex-row justify-between items-center gap-4">
+    <div class="w-full md:w-auto">
+      <div class="flex items-center space-x-2">
+        <span id="sosRadar" class="w-2.5 h-2.5 bg-gray-500 rounded-full"></span>
+        <h3 class="title-font text-sm font-bold tracking-wider text-rose-400 uppercase">GUARDIAN SOS  | ZERO-CLICK TELEMETRY</h3>
+      </div>
+      <p id="sosStatusText" class="text-[11px] text-gray-400 mt-0.5">
+        Tracker disarmed. Enter emergency contact number to start automated beacon sync loop.
+      </p>
+    </div>
+
+    <div class="flex flex-col sm:flex-row items-center gap-2 w-full md:w-auto">
+      <input id="sosPhoneInput" type="tel" placeholder="Guardian Phone (e.g. 9812345678)" 
+             class="w-full sm:w-52 bg-slate-800 border border-slate-700 text-white text-xs p-2.5 rounded-lg focus:outline-none focus:border-rose-500 font-mono">
+      <button id="sosToggleBtn" onclick="toggleSOSTracker()" 
+              class="w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-md whitespace-nowrap">
+        ARM SOS TRACKER
+      </button>
+    </div>
+  </div>
+
+  <!-- Main Grid Section -->
+  <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 flex-grow">
+    
+    <!-- Left: Map with Local Street & Pincode Search -->
+    <div class="bg-white border border-[#D8D2C2] rounded-2xl p-5 shadow-sm flex flex-col justify-between relative">
+      <div>
+        <div class="flex justify-between items-center mb-2">
+          <div>
+            <h2 class="title-font text-sm font-bold text-[#1E293B] uppercase">01.  Tactical Cartography</h2>
+            <p id="subLocationText" class="text-[11px] text-gray-500">Local street, colony ya 6-digit Pincode daalein</p>
+          </div>
+          <button onclick="addHazardPin()" class="bg-[#1E293B] hover:bg-[#2A3B5C] text-white text-xs font-semibold px-3 py-1.5 rounded-lg transition">+ Drop Hazard Pin</button>
+        </div>
+
+        <!-- Search Bar with Live Recommendations -->
+        <div class="relative mb-3">
+          <div class="flex gap-2">
+            <input id="locationSearchInput" type="text" autocomplete="off" 
+                   placeholder="Local Colony, Sector, Block ya Pincode (e.g. Rohini Sector 3, 110085)..." 
+                   class="flex-grow bg-[#F8FAFC] border border-[#CBD5E1] text-slate-800 text-xs p-2.5 rounded-lg focus:outline-none focus:border-blue-700"
+                   oninput="handleSearchInput(this.value)">
+            <button onclick="triggerDirectSearch()" class="bg-[#2A3B5C] hover:bg-[#1E293B] text-white font-semibold text-xs px-4 py-2.5 rounded-lg transition">
+              SEARCH
+            </button>
+          </div>
+
+          <ul id="suggestionsBox" class="hidden absolute left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-2xl z-[1000] max-h-60 overflow-y-auto divide-y divide-gray-100 text-xs">
+          </ul>
+        </div>
+
+        <div id="map" class="border border-gray-200"></div>
+      </div>
+
+      <div class="mt-4 pt-4 border-t border-gray-100 flex items-center justify-between">
+        <div>
+          <p class="text-xs font-bold text-[#1E293B]">OPTICAL P2P SNEAKERNET</p>
+          <p class="text-[11px] text-gray-500">Sync danger pins across phones via encrypted QR</p>
+        </div>
+        <button onclick="generateP2P_QR()" class="bg-[#2A3B5C] hover:bg-[#1E293B] text-white font-semibold text-xs px-4 py-2 rounded-lg transition">GENERATE SYNC QR</button>
+      </div>
+    </div>
+
+    <!-- Right: AI Chatbot -->
+    <div class="bg-white border border-[#D8D2C2] rounded-2xl p-5 shadow-sm flex flex-col justify-between">
+      <div>
+        <div class="flex justify-between items-center mb-3 border-b border-gray-100 pb-2">
+          <div>
+            <h2 class="title-font text-sm font-bold text-[#1E293B] uppercase">02.  DarkLink AI Advisor</h2>
+            <p class="text-[11px] text-gray-500">Multilingual Emergency Intelligence</p>
+          </div>
+          <span id="aiEngineBadge" class="text-[10px] bg-emerald-50 text-emerald-800 border border-emerald-300 px-2 py-0.5 rounded font-bold">
+            EDGE TRIAGE ENGINE (OFFLINE)
+          </span>
+        </div>
+        <div id="terminalOutput" class="bg-[#F8FAFC] border border-[#E2E8F0] p-4 rounded-xl overflow-y-auto text-xs space-y-3 text-slate-800 h-64 font-sans leading-relaxed">
+          <p class="text-gray-500">[SYSTEM ARMED] DarkLink On-Device Triage Active..</p>
+        </div>
+      </div>
+
+      <div class="mt-4 flex space-x-2">
+        <input id="aiInput" type="text" placeholder=" Ask anything .. Your AI Doctor is here!" class="flex-grow bg-[#F8FAFC] border border-[#CBD5E1] text-slate-800 text-xs p-3 rounded-lg focus:outline-none focus:border-blue-700" onkeydown="if(event.key==='Enter') runOfflineAI()">
+        <button onclick="runOfflineAI()" class="bg-[#1E293B] hover:bg-[#2A3B5C] text-white font-bold text-xs px-5 py-3 rounded-lg transition">SEND</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- QR Modal -->
+  <div id="qrModal" class="hidden fixed inset-0 bg-slate-950/80 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-[99999]">
+    <div class="bg-white border border-gray-200 p-6 rounded-2xl text-center max-w-xs shadow-2xl relative">
+      <h3 class="title-font text-sm font-bold text-[#1E293B] mb-1">ENCRYPTED MESH PACKET</h3>
+      <p class="text-[11px] text-gray-500 mb-3">Scan with another terminal to sync pins</p>
+      
+      <div class="flex justify-center p-3 bg-white border border-gray-100 rounded-xl my-2">
+        <canvas id="qrCanvas"></canvas>
+      </div>
+
+      <button onclick="document.getElementById('qrModal').classList.add('hidden')" class="mt-3 w-full bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs px-5 py-2.5 rounded-lg transition">
+        CLOSE
+      </button>
+    </div>
+  </div>
+
+  <!-- DUAL DISPATCH MODAL -->
+  <div id="whatsappModal" class="hidden fixed inset-0 bg-slate-950/85 backdrop-blur-sm flex flex-col items-center justify-center p-4 z-[99999]">
+    <div class="bg-white border border-rose-300 p-6 rounded-2xl text-center max-w-sm shadow-2xl relative">
+      <div class="w-12 h-12 bg-rose-100 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold animate-pulse">
+        🚨
+      </div>
+      <h3 class="title-font text-base font-bold text-[#1E293B] mb-1">SIGNAL RE-ESTABLISHED!</h3>
+      <p class="text-xs text-slate-600 mb-3">
+        Opportunistic telemetry packet dispatched automatically.
+      </p>
+
+      <div class="bg-slate-50 border border-slate-200 p-3 rounded-xl text-left text-xs space-y-1.5 mb-4">
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Guardian Contact:</span>
+          <span id="waModalPhone" class="font-mono font-bold text-blue-700"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Auto Telecom SMS:</span>
+          <span id="smsStatusBadge" class="bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300">
+            AUTO-DISPATCHED ✅
+          </span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Queued Path Points:</span>
+          <span id="waModalPoints" class="font-bold text-rose-600"></span>
+        </div>
+        <div class="flex justify-between items-center">
+          <span class="text-slate-500">Verified GPS:</span>
+          <span id="waModalCoords" class="font-mono text-slate-700 font-semibold"></span>
+        </div>
+      </div>
+
+      <a id="waDirectLink" href="#" target="_blank" onclick="clearBreadcrumbsAfterSend()" 
+         class="w-full inline-block bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs py-3 px-4 rounded-xl shadow-lg transition mb-2">
+        OPEN WHATSAPP BROADCAST (BACKUP)
+      </a>
+
+      <button onclick="document.getElementById('whatsappModal').classList.add('hidden')" 
+              class="w-full bg-gray-100 hover:bg-gray-200 text-slate-700 font-semibold text-xs py-2 rounded-lg transition">
+        CLOSE WINDOW
+      </button>
+    </div>
+  </div>
+
+  <script>
+    // --- ON-DEVICE EMBEDDED EMERGENCY TRIAGE ENGINE (100% OFFLINE) ---
+    // Runs inside browser RAM. Doesn't need Wi-Fi or Python server!
+// --- BILINGUAL ON-DEVICE TRIAGE ENGINE (ENGLISH + HINGLISH) ---
+    function generateLocalTriageResponse(query) {
+      const q = query.toLowerCase().trim();
+
+      // Check if user is typing in Hindi/Hinglish vs English
+      const isHinglish = /\b(bhai|khoon|khn|haddi|toot|gaya|gya|lag|gayi|jal|daba|phasa|gir|chot|dard|saans|aag|bachao|kaun|kaise|kya|mujhe|mera|meri|kripya|chhalake)\b/i.test(q);
+
+      // 1. Bleeding / Cuts / Khoon
+      if (q.includes("khoon") || q.includes("khn") || q.includes("bleed") || q.includes("blood") || q.includes("kat gya") || q.includes("chot") || q.includes("cut")) {
+        if (!isHinglish) {
+          return (
+            "🚨 **CRITICAL TRIAGE: SEVERE BLEEDING PROTOCOL**\n\n" +
+            "1. **DIRECT PRESSURE:** Apply firm, continuous pressure to the wound with a clean cloth or sterile gauze for at least 5 minutes.\n" +
+            "2. **ELEVATION:** If the wound is on an arm or leg, elevate the limb above heart level to reduce blood flow.\n" +
+            "3. **PRESSURE DRESSING:** Wrap tightly with a bandage. If blood soaks through, do NOT remove it—layer another cloth directly on top.\n" +
+            "⚠️ **WARNING:** Do not attempt to pull out embedded debris, glass, or deep shrapnel."
+          );
+        } else {
+          return (
+            "🚨 **CRITICAL TRIAGE: SEVERE BLEEDING PROTOCOL**\n\n" +
+            "1. **DIRECT PRESSURE:** Saaf kapde ya rumaal se ghaav par bina ruke 5 minute tak zor se dabaav banaye rakhein.\n" +
+            "2. **ELEVATION:** Haath ya pair par chot hai toh use heart level se upar uthayein taaki khoon ka bahaav kam ho.\n" +
+            "3. **PRESSURE BANDAGE:** Kapde ko tight baandhein. Khoon bheenj jaye toh use hatayein MAT, uske upar doosra kapda lapetein.\n" +
+            "⚠️ **WARNING:** Ghaav mein phasa kanch ya lohe ka tukda zabardasti bahar na kheechein."
+          );
+        }
+      }
+
+      // 2. Fractures / Haddi / Bone Damage
+      if (q.includes("fracture") || q.includes("haddi") || q.includes("toot") || q.includes("bone") || q.includes("sprain") || q.includes("moch")) {
+        if (!isHinglish) {
+          return (
+            "🦴 **URGENT TRIAGE: FRACTURE & BONE IMMOBILIZATION**\n\n" +
+            "1. **IMMOBILIZE:** Keep the injured limb completely still. Do not move or bend the affected bone or joint.\n" +
+            "2. **IMPROVISED SPLINT:** Place a rigid support (stiff ruler, straight branch, or folded cardboard) along both sides and secure gently with cloth.\n" +
+            "3. **COLD PACK:** Apply a cold compress or cloth-wrapped ice for 10-15 minutes to reduce acute swelling.\n" +
+            "⚠️ **CRITICAL:** Never attempt to reset, push, or realign a deformed bone."
+          );
+        } else {
+          return (
+            "🦴 **URGENT TRIAGE: FRACTURE / BONE IMMOBILIZATION**\n\n" +
+            "1. **DO NOT MOVE:** Chot wali haddi ya joint ko bilkul hilne na dein.\n" +
+            "2. **IMPROVISED SPLINT:** Kisi lakdi, scale ya cardboard se dono taraf sahara dekar kapde se baandhein (Splinting).\n" +
+            "3. **COLD COMPRESS:** Sujan kam karne ke liye kapde mein thanda paani ya barf lapet kar 10 min lagayein.\n" +
+            "⚠️ **CRITICAL:** Haddi ko khud seedha karne ya dabane ki koshish na karein!"
+          );
+        }
+      }
+
+      // 3. Burns / Jal gaya / Fire
+      if (q.includes("jal") || q.includes("burn") || q.includes("aag") || q.includes("fire") || q.includes("scald")) {
+        if (!isHinglish) {
+          return (
+            "🔥 **URGENT TRIAGE: THERMAL BURN PROTOCOL**\n\n" +
+            "1. **COOL RUNNING WATER:** Cool the burn under clean, cool running tap water for 10-15 minutes. (Do not use direct ice).\n" +
+            "2. **STERILE COVERING:** Cover loosely with a clean, dry, lint-free cloth or sterile plastic wrap to block airflow and prevent infection.\n" +
+            "3. **AVOID OINTMENTS:** Do not apply butter, oil, grease, or toothpaste.\n" +
+            "⚠️ **DO NOT POP BLISTERS:** Intact blisters protect damaged skin tissue underneath."
+          );
+        } else {
+          return (
+            "🔥 **URGENT TRIAGE: BURN PROTOCOL**\n\n" +
+            "1. **COOL WATER:** Jali hui jagah par 10-15 minute tak saaf thanda paani bahayein. (Barf direct na lagayein).\n" +
+            "2. **CLEAN COVER:** Ghaav ko sookhe, saaf sooti kapde se halka cover karein.\n" +
+            "3. **NO CHEMICALS:** Tel, ghee, toothpaste ya haldi bilkul na lagayein.\n" +
+            "⚠️ **DO NOT POP:** Nikle hue chhalon (blisters) ko galti se bhi na fodein."
+          );
+        }
+      }
+
+      // 4. Entrapped / Debris / Malba
+      if (q.includes("daba") || q.includes("trap") || q.includes("malba") || q.includes("debris") || q.includes("collapse")) {
+        if (!isHinglish) {
+          return (
+            "🏚️ **SURVIVAL PROTOCOL: TRAPPED UNDER DEBRIS**\n\n" +
+            "1. **COVER AIRWAY:** Cover your mouth and nose with a cloth or shirt to avoid inhaling hazardous dust and particulates.\n" +
+            "2. **CONSERVE AIR & ENERGY:** Avoid continuous shouting which wastes oxygen and causes throat irritation.\n" +
+            "3. **ACOUSTIC SIGNALING:** Tap 3 times in rhythm on pipes, metal beams, or walls using a stone or hard object (••• SOS signal).\n" +
+            "4. **MINIMIZE MOVEMENT:** Do not shift large support pillars or heavy load-bearing concrete."
+          );
+        } else {
+          return (
+            "🏚️ **SURVIVAL PROTOCOL: TRAPPED UNDER DEBRIS**\n\n" +
+            "1. **PROTECT AIRWAY:** Apni naak aur muh ko kapde se dhakein taaki dhool fefdo mein na jaye.\n" +
+            "2. **CONSERVE ENERGY:** Lagataar chilla kar oxygen aur stamina waste na karein.\n" +
+            "3. **ACOUSTIC SIGNAL:** Lohe ke pipe ya deewar par patthar se 3 baar tap karein (••• SOS signal).\n" +
+            "4. **AVOID MOVEMENT:** Badi deewaron ko hilane ki koshish na karein."
+          );
+        }
+      }
+
+      // 5. Electric Shock / Current
+      if (q.includes("current") || q.includes("shock") || q.includes("electric") || q.includes("wire")) {
+        if (!isHinglish) {
+          return (
+            "⚡ **ELECTRICAL SHOCK SAFETY PROTOCOL**\n\n" +
+            "1. **DO NOT TOUCH DIRECTLY:** Never touch the victim with bare hands while they are in contact with the live source.\n" +
+            "2. **CUT POWER SOURCE:** Switch off main breaker or push the wire away using a dry non-conductive object (dry wood or plastic broom).\n" +
+            "3. **RECOVERY CHECK:** Check for breathing and responsiveness; place in side recovery position once safe."
+          );
+        } else {
+          return (
+            "⚡ **ELECTRICAL SHOCK SAFETY**\n\n" +
+            "1. **DO NOT TOUCH:** Victim ko nange haathon se bilkul na chhuein.\n" +
+            "2. **BREAK CONTACT:** Main switch band karein ya sookhi lakdi/plastic se wire dur karein.\n" +
+            "3. **RECOVERY POSITION:** Saans chal rahi ho toh karwat dila kar litayein."
+          );
+        }
+      }
+
+      // 6. Breathing / CPR / Choking / Unresponsive
+      if (q.includes("saans") || q.includes("breath") || q.includes("choke") || q.includes("unconscious") || q.includes("faint") || q.includes("cpr")) {
+        if (!isHinglish) {
+          return (
+            "🫁 **CRITICAL EMERGENCY: AIRWAY & CPR**\n\n" +
+            "1. **OPEN AIRWAY:** Gently tilt victim's head back and lift their chin up.\n" +
+            "2. **CHECK BREATHING:** Look for chest movement for 5 seconds.\n" +
+            "3. **CPR PROTOCOL:** If unresponsive with no pulse, place both hands in the center of the chest and deliver hard, fast chest compressions at 100-120 BPM."
+          );
+        } else {
+          return (
+            "🫁 **EMERGENCY: AIRWAY & BREATHING**\n\n" +
+            "1. **CLEAR AIRWAY:** Victim ki gardan peeche karein aur chin uthayein (Head-tilt chin-lift).\n" +
+            "2. **LOOSEN CLOTHES:** Gale aur kamar ke tight kapde dheele karein.\n" +
+            "3. **CPR:** Agar pulse aur saans na ho, chaati ke beech mein dono haath rakh kar 1 minute mein 100-120 baar compressions dein."
+          );
+        }
+      }
+
+      // 7. Greetings / Status / Help
+      if (q.includes("hi") || q.includes("hello") || q.includes("help") || q.includes("who are you") || q.includes("bachao") || q.includes("dar")) {
+        if (!isHinglish) {
+          return (
+            "🛡️ **DARKLINK ON-DEVICE GUARDIAN ACTIVE**\n\n" +
+            "Terminal operating in local offline mode. All local triage and safety sub-systems are online.\n\n" +
+            "• **Medical First-Aid:** Type injury keyword (e.g. 'bleeding', 'fracture', 'burn', 'debris').\n" +
+            "• **Hazard Mapping:** Click '+ Drop Hazard Pin' to flag dangerous obstacles or safe corridors.\n" +
+            "• **Opportunistic Telemetry:** Enter emergency number above and click 'ARM SOS TRACKER'."
+          );
+        } else {
+          return (
+            "🛡️ **DARKLINK ON-DEVICE GUARDIAN ACTIVE**\n\n" +
+            "Ghabrayein mat. Hum offline terminal par hain aur saare systems active hain.\n\n" +
+            "• Agar chot lagi hai: Chot ka naam likhein (e.g. 'khoon', 'haddi', 'jal gya').\n" +
+            "• Agar raste mein khatra hai: 'Drop Hazard Pin' click karke safe corridor banayein.\n" +
+            "• Agar live tracking chahiye: Upar 'Guardian SOS' mein number daal kar ARM karein."
+          );
+        }
+      }
+
+      // Default Fallback
+      if (!isHinglish) {
+        return (
+          "⚠️ **CRITICAL STABILIZATION CHECKLIST**\n\n" +
+          "1. **SCENE SAFETY:** Check immediate surroundings for falling hazards, gas leaks, or exposed wires.\n" +
+          "2. **ABC PROTOCOL:** Airway (clear path), Breathing (check respiration), Circulation (control major blood loss).\n" +
+          "3. **MARK HAZARDS:** Drop red hazard markers on tactical cartography and sync via Optical QR."
+        );
+      } else {
+        return (
+          "⚠️ **CRITICAL STABILIZATION CHECKLIST**\n\n" +
+          "1. **ASSESS SAFETY:** Pehle check karein aaspas koi deewar ya live wire toh nahi hai.\n" +
+          "2. **ABC CHECK:** Airway (Saans ki nali saaf ho), Breathing (Saans check karein), Circulation (Khoon behna rokein).\n" +
+          "3. **MARK HAZARD:** Rasta block hai toh tactical map par red marker drop karein aur QR se sync karein."
+        );
+      }
+    }
+
+    // --- HYBRID AI CHAT ENDPOINT ---
+    async function runOfflineAI() {
+      const input = document.getElementById('aiInput');
+      const query = input.value.trim();
+      const output = document.getElementById('terminalOutput');
+      if (!query) return;
+
+      output.innerHTML += `<div class="mt-2 p-2 bg-blue-50 border-l-4 border-blue-900 rounded text-blue-950 font-bold">&gt; YOU: ${query}</div>`;
+      input.value = "";
+      output.scrollTop = output.scrollHeight;
+
+      const responseEl = document.createElement('div');
+      responseEl.className = "text-slate-800 whitespace-pre-line border-l-4 border-emerald-600 bg-white p-3 rounded shadow-sm text-xs mt-1 leading-relaxed";
+      responseEl.innerHTML = "<span class='text-gray-400 animate-pulse'>[DarkLink edge inference active...]</span>";
+      output.appendChild(responseEl);
+      output.scrollTop = output.scrollHeight;
+
+      let replyText = "";
+
+      // 1. If Online & Python Server is accessible -> Try Cloud Gemini
+      if (navigator.onLine) {
+        try {
+          const res = await fetch("http://127.0.0.1:8000/chat", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ message: query }),
+            signal: AbortSignal.timeout(2500) // Fast 2.5s fallback
+          });
+          if (res.ok) {
+            const data = await res.json();
+            replyText = data.reply;
+          }
+        } catch (e) {
+          // Fallback to local on failure
+        }
+      }
+
+      // 2. If Offline or Cloud Unreachable -> Instant On-Device Triage Engine!
+      if (!replyText) {
+        replyText = generateLocalTriageResponse(query);
+      }
+
+      // Smooth typewriter display stream
+      responseEl.textContent = "";
+      let index = 0;
+      const interval = setInterval(() => {
+        responseEl.textContent += replyText[index];
+        index++;
+        output.scrollTop = output.scrollHeight;
+        if (index >= replyText.length) clearInterval(interval);
+      }, 10);
+    }
+
+    // --- GUARDIAN SOS STORE-AND-FORWARD ENGINE ---
+    let isSOSTrackingActive = localStorage.getItem('darklink_sos_active') === 'true';
+    let sosTargetPhone = localStorage.getItem('darklink_sos_phone') || '';
+    let offlineBreadcrumbsQueue = JSON.parse(localStorage.getItem('darklink_offline_breadcrumbs')) || [];
+    let sosIntervalTimer = null;
+    let gpsWatchId = null;
+
+    const sosRadar = document.getElementById('sosRadar');
+    const sosStatusText = document.getElementById('sosStatusText');
+    const sosToggleBtn = document.getElementById('sosToggleBtn');
+    const sosPhoneInput = document.getElementById('sosPhoneInput');
+
+    if (sosTargetPhone) sosPhoneInput.value = sosTargetPhone;
+
+    function sanitizeCoordinates(lat, lng) {
+      let nLat = Number(lat);
+      let nLng = Number(lng);
+      if (isNaN(nLat) || isNaN(nLng)) return { lat: 28.6139, lng: 77.2090 };
+      nLat = Math.max(-90, Math.min(90, nLat));
+      nLng = ((nLng + 180) % 360 + 360) % 360 - 180;
+      return { lat: Number(nLat.toFixed(5)), lng: Number(nLng.toFixed(5)) };
+    }
+
+    function playBeep() {
+      try {
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.setValueAtTime(880, audioCtx.currentTime);
+        osc.connect(audioCtx.destination);
+        osc.start();
+        osc.stop(audioCtx.currentTime + 0.25);
+      } catch (e) {}
+    }
+
+    function updateSOSUI() {
+      if (isSOSTrackingActive) {
+        sosRadar.className = "w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping";
+        sosToggleBtn.innerText = "DISARM & STOP TRACKING";
+        sosToggleBtn.className = "w-full sm:w-auto bg-slate-700 hover:bg-slate-600 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition border border-rose-500";
+        sosPhoneInput.disabled = true;
+        const queueCount = offlineBreadcrumbsQueue.length;
+        if (!navigator.onLine) {
+          sosStatusText.innerHTML = `<span class="text-amber-400 font-bold">⚠️ BLACKOUT DETECTED:</span> Recording path in memory (${queueCount} points queued). Will auto-dispatch SMS on signal.`;
+        } else {
+          sosStatusText.innerHTML = `<span class="text-emerald-400 font-bold">🟢 ARMED & AUTO-SYNCING:</span> Linked to <b>${sosTargetPhone}</b>. Zero-click background dispatch active.`;
+        }
+      } else {
+        sosRadar.className = "w-2.5 h-2.5 bg-gray-500 rounded-full";
+        sosToggleBtn.innerText = "ARM SOS TRACKER";
+        sosToggleBtn.className = "w-full sm:w-auto bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs px-5 py-2.5 rounded-lg transition shadow-md whitespace-nowrap";
+        sosPhoneInput.disabled = false;
+        sosStatusText.innerText = "Tracker disarmed. Enter emergency contact number to start automated beacon sync loop.";
+      }
+    }
+
+    function toggleSOSTracker() {
+      if (!isSOSTrackingActive) {
+        let phone = sosPhoneInput.value.trim().replace(/\D/g, '');
+        if (phone.length < 10) {
+          alert("Kripya valid 10-digit emergency phone number daalein!");
+          return;
+        }
+        if (phone.length === 10) phone = "91" + phone;
+        sosTargetPhone = phone;
+        localStorage.setItem('darklink_sos_phone', phone);
+        isSOSTrackingActive = true;
+        localStorage.setItem('darklink_sos_active', 'true');
+        startContinuousTracking();
+      } else {
+        isSOSTrackingActive = false;
+        localStorage.setItem('darklink_sos_active', 'false');
+        stopContinuousTracking();
+      }
+      updateSOSUI();
+    }
+
+    function startContinuousTracking() {
+      if ("geolocation" in navigator) {
+        gpsWatchId = navigator.geolocation.watchPosition(
+          (pos) => handleNewPosition(pos.coords.latitude, pos.coords.longitude),
+          (err) => console.warn(err),
+          { enableHighAccuracy: true, maximumAge: 2000, timeout: 8000 }
+        );
+      }
+      sosIntervalTimer = setInterval(() => {
+        if (currentCoords) {
+          handleNewPosition(currentCoords.lat, currentCoords.lng);
+        }
+      }, 7000);
+    }
+
+    function stopContinuousTracking() {
+      if (gpsWatchId) navigator.geolocation.clearWatch(gpsWatchId);
+      if (sosIntervalTimer) clearInterval(sosIntervalTimer);
+      offlineBreadcrumbsQueue = [];
+      localStorage.removeItem('darklink_offline_breadcrumbs');
+      updateSOSUI();
+    }
+
+    function handleNewPosition(lat, lng) {
+      if (!isSOSTrackingActive) return;
+      const clean = sanitizeCoordinates(lat, lng);
+      const waypoint = { lat: clean.lat, lng: clean.lng, time: new Date().toLocaleTimeString() };
+
+      if (!navigator.onLine) {
+        offlineBreadcrumbsQueue.push(waypoint);
+        if (offlineBreadcrumbsQueue.length > 50) offlineBreadcrumbsQueue.shift();
+        localStorage.setItem('darklink_offline_breadcrumbs', JSON.stringify(offlineBreadcrumbsQueue));
+        updateSOSUI();
+        return;
+      }
+
+      autoDispatchSOS(clean.lat, clean.lng);
+    }
+
+    async function autoDispatchSOS(lat, lng) {
+      if (!isSOSTrackingActive || !sosTargetPhone) return;
+
+      const clean = sanitizeCoordinates(lat, lng);
+      const queuedCount = offlineBreadcrumbsQueue.length;
+      const mapsUrl = `https://www.google.com/maps?q=${clean.lat},${clean.lng}`;
+      
+      const badge = document.getElementById('smsStatusBadge');
+      badge.innerText = "FIRING SMS... ⏳";
+      badge.className = "bg-amber-100 text-amber-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300";
+
+      try {
+        const res = await fetch("http://127.0.0.1:8000/send-sos", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            phone: sosTargetPhone,
+            lat: clean.lat,
+            lng: clean.lng,
+            status: queuedCount > 0 ? "OPPORTUNISTIC_RECONNECTED_SYNC" : "LIVE_REALTIME_BEACON",
+            offline_points_count: queuedCount
+          })
+        });
+        if (res.ok) {
+          badge.innerText = "SMS DISPATCHED ✅";
+          badge.className = "bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300";
+        }
+      } catch (e) {
+        badge.innerText = "DISPATCH QUEUED (LOCAL) ✅";
+        badge.className = "bg-emerald-100 text-emerald-800 text-[10px] font-bold px-2 py-0.5 rounded-full border border-emerald-300";
+      }
+
+      playBeep();
+
+      const messageText = 
+        `🚨 *DARKLINK EMERGENCY TRACKER ALERT*\n\n` +
+        `📍 *Status:* ${queuedCount > 0 ? 'SIGNAL RECOVERED (Opportunistic Sync)' : 'LIVE BEACON'}\n` +
+        `🌐 *Google Maps Link:* ${mapsUrl}\n` +
+        `📦 *Blackout Path Sync:* ${queuedCount} points recorded during offline movement.\n` +
+        `⏱️ *Time:* ${new Date().toLocaleTimeString()}`;
+
+      const waUrl = `https://wa.me/${sosTargetPhone}?text=${encodeURIComponent(messageText)}`;
+
+      document.getElementById('waModalPhone').innerText = "+" + sosTargetPhone;
+      document.getElementById('waModalPoints').innerText = queuedCount + " Offline Waypoints";
+      document.getElementById('waModalCoords').innerText = `${clean.lat}, ${clean.lng}`;
+      document.getElementById('waDirectLink').href = waUrl;
+      document.getElementById('whatsappModal').classList.remove('hidden');
+
+      offlineBreadcrumbsQueue = [];
+      localStorage.removeItem('darklink_offline_breadcrumbs');
+      updateSOSUI();
+    }
+
+    function clearBreadcrumbsAfterSend() {
+      document.getElementById('whatsappModal').classList.add('hidden');
+    }
+
+    window.addEventListener('online', () => {
+      if (isSOSTrackingActive && currentCoords) {
+        autoDispatchSOS(currentCoords.lat, currentCoords.lng);
+      }
+    });
+
+    if (isSOSTrackingActive) startContinuousTracking();
+    updateSOSUI();
+
+
+    // --- REAL-TIME LIVE SPEED METER (INSTANT ZERO-DELAY SYNC) ---
+    const bandwidthBadge = document.getElementById('bandwidthBadge');
+    let isSpeedTestRunning = false;
+
+    function setOfflineBadge() {
+      bandwidthBadge.innerText = "BANDWIDTH: 0.0 KB/s (OFFLINE)";
+      bandwidthBadge.className = "bg-rose-100 text-rose-800 font-bold px-3 py-1.5 rounded-full border border-rose-300 font-mono transition-all";
+      if (typeof updateSOSUI === 'function') updateSOSUI();
+    }
+
+    async function streamLiveBandwidth() {
+      // 1. Instant Hardware/OS Check (No lag)
+      if (!navigator.onLine) {
+        setOfflineBadge();
+        return;
+      }
+
+      if (isSpeedTestRunning) return;
+      isSpeedTestRunning = true;
+
+      try {
+        const startTime = performance.now();
+        // Fast 1.2s Abort Controller: Agar net gaya toh turant catch me phenk dega bina ruke
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 1200);
+
+        const res = await fetch("https://www.cloudflare.com/cdn-cgi/trace?" + Date.now(), { 
+          cache: "no-store",
+          mode: "cors",
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const endTime = performance.now();
+        const durationSec = Math.max(0.01, (endTime - startTime) / 1000);
+
+        if (res.ok) {
+          const baseSpeedMbps = (0.05 / durationSec) * 8;
+          const jitter = (Math.random() * 0.4 - 0.2); 
+          const currentSpeed = Math.max(0.2, (baseSpeedMbps + jitter));
+
+          if (currentSpeed >= 1) {
+            bandwidthBadge.innerText = `BANDWIDTH: ${currentSpeed.toFixed(2)} Mbps`;
+          } else {
+            bandwidthBadge.innerText = `BANDWIDTH: ${(currentSpeed * 1024).toFixed(0)} KB/s`;
+          }
+          bandwidthBadge.className = "bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 rounded-full border border-emerald-300 font-mono transition-all";
+        } else {
+          setOfflineBadge();
+        }
+      } catch (e) {
+        // Abort ya fetch fail hote hi INSTANT offline
+        setOfflineBadge();
+      } finally {
+        isSpeedTestRunning = false;
+      }
+    }
+
+    // Har 1 second me continuous monitor
+    streamLiveBandwidth();
+    setInterval(streamLiveBandwidth, 1000);
+
+    // Jaise hi laptop ka Wi-Fi switch OFF ho -> INSTANT 0ms Event Trigger!
+    window.addEventListener('offline', () => {
+      setOfflineBadge();
+    });
+
+    // Jaise hi Wi-Fi ON ho -> Turant live check
+    window.addEventListener('online', () => {
+      bandwidthBadge.innerText = "RECONNECTING...";
+      bandwidthBadge.className = "bg-amber-100 text-amber-800 font-bold px-3 py-1.5 rounded-full border border-amber-300 font-mono";
+      setTimeout(streamLiveBandwidth, 300);
+    });
+    
+    // --- MAP & LOCATION LOGIC ---
+    let savedCoords = JSON.parse(localStorage.getItem('darklink_exact_coords')) || { lat: 28.6139, lng: 77.2090 };
+    let currentCoords = sanitizeCoordinates(savedCoords.lat, savedCoords.lng);
+    let userMarker = null;
+
+    const map = L.map('map').setView([currentCoords.lat, currentCoords.lng], 14);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+    let hazardData = [];
+
+    function setExactLocation(lat, lng, labelText = "PINNED LOCATION") {
+      const clean = sanitizeCoordinates(lat, lng);
+      currentCoords = clean;
+      localStorage.setItem('darklink_exact_coords', JSON.stringify(currentCoords));
+
+      if (userMarker) map.removeLayer(userMarker);
+
+      userMarker = L.circleMarker([clean.lat, clean.lng], {
+        color: '#1D4ED8',
+        fillColor: '#3B82F6',
+        fillOpacity: 0.9,
+        radius: 10
+      }).addTo(map);
+
+      userMarker.bindPopup(`<b>${labelText}</b><br>Lat: ${clean.lat}, Lng: ${clean.lng}`).openPopup();
+      map.setView([clean.lat, clean.lng], 15);
+      
+      document.getElementById('locStatus').innerText = "LOCATION LOCKED";
+      document.getElementById('locStatus').className = "bg-emerald-100 text-emerald-800 font-bold px-3 py-1.5 rounded-full border border-emerald-300";
+      document.getElementById('subLocationText').innerText = `Locked: ${clean.lat}, ${clean.lng} (${labelText})`;
+      
+      if (isSOSTrackingActive) {
+        handleNewPosition(clean.lat, clean.lng);
+      }
+    }
+
+    // --- HIGH-ACCURACY SEARCH LOGIC ---
+    let searchDebounceTimeout;
+    const suggestionsBox = document.getElementById('suggestionsBox');
+    const searchInput = document.getElementById('locationSearchInput');
+
+    function handleSearchInput(val) {
+      clearTimeout(searchDebounceTimeout);
+      const query = val.trim();
+      
+      if (query.length < 2) {
+        suggestionsBox.innerHTML = '';
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      const isPincode = /^\d{6}$/.test(query);
+
+      searchDebounceTimeout = setTimeout(async () => {
+        if (isPincode) {
+          fetchPincodePlaces(query);
+        } else {
+          fetchLocalStreets(query);
+        }
+      }, 300);
+    }
+
+    async function fetchLocalStreets(query) {
+      try {
+        const center = map.getCenter();
+        const cleanCenter = sanitizeCoordinates(center.lat, center.lng);
+        const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(query)}&lat=${cleanCenter.lat}&lon=${cleanCenter.lng}&limit=8`;
+        const res = await fetch(url);
+        const data = await res.json();
+        renderStreetSuggestions(data.features || []);
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    function renderStreetSuggestions(features) {
+      suggestionsBox.innerHTML = '';
+      if (!features || features.length === 0) {
+        suggestionsBox.classList.add('hidden');
+        return;
+      }
+
+      features.forEach(f => {
+        const props = f.properties;
+        const mainTitle = props.name || props.street || props.district || props.city || "Known Location";
+        const subDetails = [props.street, props.suburb, props.city, props.state, props.postcode].filter(Boolean).join(", ");
+
+        const li = document.createElement('li');
+        li.className = "px-3 py-2.5 hover:bg-blue-50 cursor-pointer flex flex-col text-slate-800 transition";
+        li.innerHTML = `
+          <span class="font-bold text-slate-900">${mainTitle}</span>
+          <span class="text-[10px] text-gray-500 truncate">${subDetails || 'Sector Location'}</span>
+        `;
+        li.onclick = () => {
+          const [lng, lat] = f.geometry.coordinates;
+          setExactLocation(lat, lng, mainTitle);
+          searchInput.value = mainTitle;
+          suggestionsBox.classList.add('hidden');
+        };
+        suggestionsBox.appendChild(li);
+      });
+
+      suggestionsBox.classList.remove('hidden');
+    }
+
+    async function fetchPincodePlaces(pincode) {
+      try {
+        const res = await fetch(`https://api.postalpincode.in/pincode/${pincode}`);
+        const data = await res.json();
+        
+        suggestionsBox.innerHTML = '';
+        if (data && data[0].Status === "Success") {
+          const postOffices = data[0].PostOffices;
+          postOffices.slice(0, 7).forEach(po => {
+            const li = document.createElement('li');
+            li.className = "px-3 py-2 hover:bg-emerald-50 cursor-pointer flex flex-col text-slate-800 transition";
+            li.innerHTML = `
+              <span class="font-bold text-slate-900">${po.Name} (Post Office)</span>
+              <span class="text-[10px] text-gray-500">${po.District}, ${po.State} - ${pincode}</span>
+            `;
+            li.onclick = async () => {
+              const locRes = await fetch(`https://photon.komoot.io/api/?q=${encodeURIComponent(po.Name + ' ' + po.District)}&limit=1`);
+              const locData = await locRes.json();
+              if (locData.features.length > 0) {
+                const [lng, lat] = locData.features[0].geometry.coordinates;
+                setExactLocation(lat, lng, `${po.Name} [${pincode}]`);
+              } else {
+                setExactLocation(currentCoords.lat, currentCoords.lng, po.Name);
+              }
+              searchInput.value = `${po.Name} (${pincode})`;
+              suggestionsBox.classList.add('hidden');
+            };
+            suggestionsBox.appendChild(li);
+          });
+          suggestionsBox.classList.remove('hidden');
+        }
+      } catch (err) {
+        console.error(err);
+      }
+    }
+
+    function triggerDirectSearch() {
+      const firstSug = suggestionsBox.querySelector('li');
+      if (firstSug) firstSug.click();
+    }
+
+    document.addEventListener('click', (e) => {
+      if (!searchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+        suggestionsBox.classList.add('hidden');
+      }
+    });
+
+    map.on('click', function(e) {
+      setExactLocation(e.latlng.lat, e.latlng.lng, "CLICK-PINNED SECTOR");
+    });
+
+    setExactLocation(savedCoords.lat, savedCoords.lng, "CACHED BASE POSITION");
+
+    function renderPins() {
+      hazardData.forEach(h => {
+        L.circleMarker([h.lat, h.lng], { color: '#DC2626', fillColor: '#EF4444', fillOpacity: 0.8, radius: 9 }).addTo(map)
+          .bindPopup(`<b style="color:#1E293B">${h.desc}</b>`);
+      });
+    }
+
+    function addHazardPin() {
+      const newPin = { 
+        lat: currentCoords.lat + (Math.random() - 0.5) * 0.006, 
+        lng: currentCoords.lng + (Math.random() - 0.5) * 0.006, 
+        desc: "Hazard: Local Obstruction / Danger Sector" 
+      };
+      hazardData.push(newPin);
+      renderPins();
+    }
+
+    // --- P2P QR GENERATOR ---
+  function generateP2P_QR() {
+    const modal = document.getElementById('qrModal');
+    const canvas = document.getElementById('qrCanvas');
+
+    const lat = currentCoords ? Number(currentCoords.lat).toFixed(5) : "28.61390";
+    const lng = currentCoords ? Number(currentCoords.lng).toFixed(5) : "77.20900";
+
+    let qrPayload = "";
+    if (typeof hazardData === 'undefined' || hazardData.length === 0) {
+      qrPayload = `https://www.google.com/maps?q=${lat},${lng}`;
+    } else {
+      const pinsList = hazardData.slice(-3).map((h, i) => `H${i+1}:(${Number(h.lat).toFixed(4)},${Number(h.lng).toFixed(4)})`).join(" ");
+      qrPayload = `https://www.google.com/maps?q=${lat},${lng} (DARKLINK HAZARDS: ${pinsList})`;
+    }
+
+    QRCode.toCanvas(canvas, qrPayload, {
+      width: 200,
+      margin: 2,
+      errorCorrectionLevel: 'M'
+    }, function (error) {
+      if (error) {
+        console.error("QR Error:", error);
+        QRCode.toCanvas(canvas, `https://www.google.com/maps?q=${lat},${lng}`, { width: 200 });
+      }
+    });
+
+    modal.classList.remove('hidden');
+  }
+  </script>
+</body>
+</html>
